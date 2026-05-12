@@ -1,4 +1,4 @@
-<!-- v1.0 - Initial Merge (aulapro + bigpro) - EditWithHg - 2026-05-12 -->
+<!-- v1.1 - Thêm nút Export CSV cho Zero-DB - 2026-05-12 -->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -47,7 +47,7 @@
             <!-- HEADER CHUNG -->
             <header class="app-header">
                 <div class="header-left">
-                    <h2>Workspace</h2>
+                    <h2>Workspace <span id="db-status-badge" class="badge badge-blue" style="margin-left: 10px;">Đang tải DB...</span></h2>
                 </div>
                 <div class="header-right donate-info">
                     <span class="donate-label">DON@TE:</span>
@@ -134,7 +134,8 @@
                         <p class="sub-header">Nhân vật, Địa danh, Vật phẩm...</p>
                     </div>
                     <div class="actions">
-                        <button class="btn-primary btn-rounded" onclick="openModal('modal-entity')"><i class="fa-solid fa-plus"></i> Thêm Mới</button>
+                        <button class="btn btn-success btn-rounded" onclick="exportNewWordsCSV()"><i class="fa-solid fa-cloud-arrow-up"></i> Export Từ Mới (CSV)</button>
+                        <button class="btn btn-primary btn-rounded" onclick="openModal('modal-entity')"><i class="fa-solid fa-plus"></i> Thêm Mới</button>
                     </div>
                 </header>
 
@@ -236,12 +237,12 @@
                                 </div>
                                 <hr style="border:0; border-top:1px solid #eee; margin: 20px 0;">
                                 <h3 style="color: #ef4444; margin-top: 0;">Danger Zone</h3>
-                                <p style="font-size: 13px; color: #666;">Xóa toàn bộ dữ liệu cài đặt, thực thể, quan hệ đã lưu trên trình duyệt này.</p>
-                                <button class="btn btn-danger" onclick="resetAllData()"><i class="fa-solid fa-trash-can"></i> XÓA TOÀN BỘ DỮ LIỆU</button>
+                                <p style="font-size: 13px; color: #666;">Xóa toàn bộ dữ liệu cài đặt và từ mới (IndexedDB) trên trình duyệt này.</p>
+                                <button class="btn btn-danger" onclick="resetAllData()"><i class="fa-solid fa-trash-can"></i> XÓA TOÀN BỘ DỮ LIỆU LOCAL</button>
                             </div>
                         </div>
 
-                        <!-- Panel Format (từ aulapro) -->
+                        <!-- Panel Format -->
                         <div id="panel-format" class="setting-panel">
                             <div class="panel-header"><h2>Chuẩn Hóa Hội Thoại (Sau dấu :)</h2></div>
                             <div class="format-container">
@@ -266,7 +267,7 @@
                             </div>
                         </div>
 
-                        <!-- Panel Caps (từ aulapro) -->
+                        <!-- Panel Caps -->
                         <div id="panel-abnormal-caps" class="setting-panel">
                             <div class="panel-header"><h2>Xử Lý Viết Hoa Bất Thường</h2></div>
                             <div class="format-container">
@@ -287,7 +288,7 @@
                             </div>
                         </div>
 
-                        <!-- Panel Regex (từ aulapro) -->
+                        <!-- Panel Regex -->
                         <div id="panel-regex" class="setting-panel">
                             <div class="panel-header"><h2>Cài Đặt Regex Chia Chương</h2></div>
                             <div class="format-container">
