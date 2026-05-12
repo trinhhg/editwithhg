@@ -1,4 +1,4 @@
-<!-- v1.1 - Thêm nút Export CSV cho Zero-DB - 2026-05-12 -->
+<!-- v1.2 - EditWithHg - 2026-05-12 -->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -22,6 +22,9 @@
                 <div class="nav-label">CÔNG CỤ BIÊN TẬP</div>
                 <button class="nav-item highlight-btn active" onclick="switchTab('replace')">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Replace Text
+                </button>
+                <button class="nav-item" onclick="switchTab('modes')">
+                    <i class="fa-solid fa-list-check"></i> Cặp Thay Thế (Modes)
                 </button>
                 <button class="nav-item" onclick="switchTab('split')">
                     <i class="fa-solid fa-scissors"></i> Chia Chương
@@ -58,6 +61,7 @@
             <!-- TAB 1: REPLACE -->
             <div id="tab-replace" class="tab-content active full-height-tab">
                 <div class="split-pane">
+                    <!-- Khung Input -->
                     <div class="pane input-pane">
                         <div class="pane-header">
                             <span><i class="fa-regular fa-file-alt"></i> Văn bản gốc</span>
@@ -69,13 +73,14 @@
                         </div>
                     </div>
 
+                    <!-- Khung Output -->
                     <div class="pane output-pane">
                         <div class="pane-header">
                             <span><i class="fa-solid fa-wand-magic-sparkles"></i> Kết quả</span>
                             <div class="counters-group">
                                 <span id="count-found" class="badge badge-yellow">Lore: 0</span>
                                 <span id="count-replace" class="badge badge-green">Replace: 0</span>
-                                <span id="count-caps" class="badge badge-blue">Auto-Caps: 0</span>
+                                <span id="count-caps" class="badge badge-blue">Caps: 0</span>
                                 <span id="output-word-count" class="badge">Words: 0</span>
                             </div>
                         </div>
@@ -85,10 +90,71 @@
                             <button class="btn btn-success full-width" onclick="copyResult()"><i class="fa-regular fa-copy"></i> Copy KQ</button>
                         </div>
                     </div>
+
+                    <!-- Sidebar Quét Danh Từ (Mới) -->
+                    <div class="pane pending-lore-pane" id="pending-sidebar">
+                        <div class="pane-header">
+                            <span><i class="fa-solid fa-radar"></i> Quét Danh Từ</span>
+                            <button class="icon-btn-sm" onclick="clearPendingLore()" title="Xóa list"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                        <div class="pending-list custom-scrollbar" id="pending-lore-list">
+                            <div class="empty-message">Chưa quét được danh từ mới nào.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- TAB 2: CHIA CHƯƠNG -->
+            <!-- TAB 2: CẶP THAY THẾ (MODES) -->
+            <div id="tab-modes" class="tab-content hidden full-height-tab">
+                <header class="top-bar tight-header">
+                    <div class="header-info">
+                        <h2>Danh Sách Cặp Thay Thế (Modes)</h2>
+                    </div>
+                    <div class="actions mode-actions" style="display: flex; gap: 10px; align-items: center;">
+                        <span style="font-size: 13px; font-weight: 600;">Chế độ:</span>
+                        <select id="mode-select" class="full-width-input" style="width: 200px; margin: 0;" onchange="switchMode(this.value)"></select>
+                        <button class="btn btn-primary btn-sm" onclick="addMode()">+ Mới</button>
+                        <button class="btn btn-secondary btn-sm" onclick="cloneMode()">Copy</button>
+                        <button class="btn btn-warning btn-sm" onclick="renameMode()">Đổi Tên</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteMode()">Xóa</button>
+                    </div>
+                </header>
+
+                <div class="toolbar" style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #e5e7eb; display: flex; gap: 15px; flex-wrap: wrap;">
+                    <div class="toolbar-group">
+                        <button id="toggle-match-case" class="btn btn-toggle" onclick="toggleModeSetting('matchCase')">Match Case: <span class="status">TẮT</span></button>
+                        <button id="toggle-whole-word" class="btn btn-toggle" onclick="toggleModeSetting('wholeWord')">Whole Word: <span class="status">BẬT</span></button>
+                        <button id="toggle-auto-caps" class="btn btn-toggle" onclick="toggleModeSetting('autoCaps')">Auto Caps: <span class="status">BẬT</span></button>
+                    </div>
+                    <div class="toolbar-group" style="margin-left: auto;">
+                        <button class="btn btn-toggle purple" onclick="alert('Tính năng Import CSV Cặp thay thế đang xây dựng')">Nhập CSV (4 cột)</button>
+                        <button class="btn btn-toggle purple" onclick="exportModeCSV()">Xuất CSV (4 cột)</button>
+                    </div>
+                </div>
+
+                <div class="actions" style="margin-bottom: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="addPairUI()"><i class="fa-solid fa-plus"></i> Thêm cặp mới</button>
+                </div>
+
+                <div class="table-container custom-scrollbar" style="flex: 1;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th width="60px">STT</th>
+                                <th>Từ Gốc (Find)</th>
+                                <th>Thay Bằng (Replace)</th>
+                                <th width="150px">Loại</th>
+                                <th width="80px">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pairs-list-body">
+                            <!-- Render STT ngược từ to xuống nhỏ -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 3: CHIA CHƯƠNG -->
             <div id="tab-split" class="tab-content hidden">
                 <div class="split-controls-wrapper">
                     <div class="split-mode-selector">
@@ -126,11 +192,11 @@
                 </div>
             </div>
 
-            <!-- TAB 3: THỰC THỂ -->
+            <!-- TAB 4: THỰC THỂ -->
             <div id="tab-entities" class="tab-content hidden">
                 <header class="top-bar tight-header">
                     <div class="header-info">
-                        <h2>Quản Lý Thực Thể</h2>
+                        <h2>Quản Lý Thực Thể (Zero-DB)</h2>
                         <p class="sub-header">Nhân vật, Địa danh, Vật phẩm...</p>
                     </div>
                     <div class="actions">
@@ -166,7 +232,7 @@
                 </div>
             </div>
 
-            <!-- TAB 4: QUAN HỆ -->
+            <!-- TAB 5: QUAN HỆ -->
             <div id="tab-relations" class="tab-content hidden">
                 <header class="top-bar tight-header">
                     <div class="header-info">
@@ -197,10 +263,9 @@
                 </div>
             </div>
 
-            <!-- TAB 5: CÀI ĐẶT -->
+            <!-- TAB 6: CÀI ĐẶT -->
             <div id="tab-settings" class="tab-content hidden">
                 <div class="settings-layout">
-                    <!-- Sidebar phụ trong Settings -->
                     <div class="settings-sidebar custom-scrollbar">
                         <div class="sidebar-category-title">CHUNG</div>
                         <button class="sidebar-btn active" data-target="panel-ui">Giao diện & Dữ liệu</button>
@@ -237,7 +302,6 @@
                                 </div>
                                 <hr style="border:0; border-top:1px solid #eee; margin: 20px 0;">
                                 <h3 style="color: #ef4444; margin-top: 0;">Danger Zone</h3>
-                                <p style="font-size: 13px; color: #666;">Xóa toàn bộ dữ liệu cài đặt và từ mới (IndexedDB) trên trình duyệt này.</p>
                                 <button class="btn btn-danger" onclick="resetAllData()"><i class="fa-solid fa-trash-can"></i> XÓA TOÀN BỘ DỮ LIỆU LOCAL</button>
                             </div>
                         </div>
@@ -311,7 +375,7 @@
         </main>
     </div>
 
-    <!-- MODALS TỪ BIGPRO -->
+    <!-- MODAL THỰC THỂ -->
     <div id="modal-entity" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header"><h3>Thực thể</h3><span class="close" onclick="closeModal('modal-entity')">&times;</span></div>
@@ -344,6 +408,7 @@
         </div>
     </div>
 
+    <!-- MODAL QUAN HỆ -->
     <div id="modal-relation" class="modal hidden">
         <div class="modal-content modal-lg">
             <div class="modal-header"><h3>Quan hệ</h3><span class="close" onclick="closeModal('modal-relation')">&times;</span></div>
@@ -363,6 +428,26 @@
                 </div>
             </div>
             <div class="modal-footer"><button class="btn btn-primary" onclick="saveRelation()">Lưu Quan Hệ</button></div>
+        </div>
+    </div>
+
+    <!-- MODAL ADD PENDING LORE QUY NHANH -->
+    <div id="modal-quick-lore" class="modal hidden">
+        <div class="modal-content" style="width: 350px;">
+            <div class="modal-header"><h3>Lưu Danh Từ Nhanh</h3><span class="close" onclick="closeModal('modal-quick-lore')">&times;</span></div>
+            <div class="modal-body">
+                <input type="hidden" id="ql-name">
+                <p>Từ quét được: <strong id="ql-name-display" style="color:var(--primary); font-size: 16px;"></strong></p>
+                <div class="form-group">
+                    <label>Chọn Loại:</label>
+                    <select id="ql-type" class="full-width-input">
+                        <option value="character">Nhân vật</option>
+                        <option value="location">Địa danh</option>
+                        <option value="faction">Thế lực</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-success" onclick="saveQuickLore()">Lưu</button></div>
         </div>
     </div>
 
