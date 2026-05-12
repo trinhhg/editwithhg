@@ -1,0 +1,160 @@
+/* v1.0 - Initial Merge (aulapro + bigpro) - EditWithHg - 2026-05-12 */
+:root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --sidebar-bg: #1e1e2f;
+    --sidebar-text: #a0a0b5;
+    --sidebar-active: #ffffff;
+    --editor-font-size: 15px;
+    --editor-font-family: 'Montserrat', sans-serif;
+}
+
+* { box-sizing: border-box; outline: none; }
+body {
+    font-family: 'Montserrat', sans-serif;
+    margin: 0; padding: 0;
+    background-color: #f3f4f6;
+    color: #374151;
+    overflow: hidden; /* Prevent full body scroll, handle inside panes */
+}
+body.loading .app-container { display: none; }
+
+/* === LAYOUT CHÍNH (Từ BigPro) === */
+.app-container { display: flex; height: 100vh; width: 100vw; }
+.sidebar {
+    width: 240px; background: var(--sidebar-bg); color: var(--sidebar-text);
+    display: flex; flex-direction: column; flex-shrink: 0;
+}
+.logo-area {
+    height: 60px; display: flex; align-items: center; padding: 0 20px;
+    font-size: 18px; font-weight: 800; color: white; gap: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.logo-icon { color: #60a5fa; }
+.nav-menu { flex: 1; padding: 20px 0; overflow-y: auto; }
+.nav-label { font-size: 11px; font-weight: 700; color: #6b7280; padding: 15px 20px 5px; text-transform: uppercase; letter-spacing: 1px; }
+.nav-item {
+    width: 100%; text-align: left; background: transparent; border: none;
+    color: var(--sidebar-text); padding: 12px 20px; font-size: 14px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; gap: 12px; transition: 0.2s;
+    border-left: 3px solid transparent;
+}
+.nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
+.nav-item.active { background: rgba(37, 99, 235, 0.15); color: white; border-left-color: var(--primary); }
+.nav-item i { width: 16px; text-align: center; }
+
+.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f3f4f6; }
+
+/* === HEADER (Từ Aulapro) === */
+.app-header {
+    height: 50px; background: white; border-bottom: 1px solid #e5e7eb;
+    display: flex; justify-content: space-between; align-items: center; padding: 0 20px; flex-shrink: 0;
+}
+.app-header h2 { margin: 0; font-size: 16px; font-weight: 700; color: #111827; }
+.donate-info { font-size: 11px; display: flex; align-items: center; gap: 5px; }
+.donate-label { background: #dc2626; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 10px; }
+.donate-details { color: #b91c1c; font-weight: 700; font-size: 12px; }
+
+/* === TAB SYSTEM === */
+.tab-content { display: none; flex: 1; overflow-y: auto; padding: 15px; }
+.tab-content.active { display: flex; flex-direction: column; }
+.full-height-tab { height: calc(100vh - 50px); padding: 15px; }
+
+/* === SPLIT PANE (REPLACE & SPLIT) === */
+.split-pane { display: flex; gap: 15px; height: 100%; min-height: 0; }
+.pane { flex: 1; display: flex; flex-direction: column; background: white; border-radius: 8px; border: 1px solid #e5e7eb; overflow: hidden; height: 100%; }
+.pane-header { padding: 10px 15px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; flex-shrink: 0; }
+.pane textarea, .output-div {
+    flex: 1; border: none; padding: 15px; font-size: var(--editor-font-size); 
+    font-family: var(--editor-font-family); line-height: 1.6; resize: none; overflow-y: auto;
+}
+.output-div { background: #fff; word-wrap: break-word; white-space: pre-wrap; }
+.output-div:empty::before { content: attr(data-placeholder); color: #9ca3af; }
+.pane-footer { padding: 10px; border-top: 1px solid #e5e7eb; background: #f9fafb; flex-shrink: 0; }
+
+/* HIGHLIGHTS (Gộp từ cả 2 web) */
+mark.hl-yellow, .hl-found { background-color: #fef08a; color: #000; padding: 0 2px; border-bottom: 2px solid #eab308; display: inline; }
+mark.hl-green, .hl-replaced { background-color: #bbf7d0; color: #000; padding: 0 2px; border-bottom: 2px solid #22c55e; display: inline; }
+
+/* === CHIA CHƯƠNG === */
+.split-controls-wrapper { background: white; padding: 10px 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e5e7eb; }
+.split-mode-selector { display: flex; gap: 20px; font-size: 13px; font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+.split-sub-controls { display: flex; align-items: center; gap: 10px; font-size: 13px; margin-top: 10px; }
+.split-buttons-group { display: flex; gap: 5px; }
+.split-mode-btn { width: 32px; height: 32px; border: 1px solid #d1d5db; background: white; border-radius: 4px; cursor: pointer; font-weight: 600; }
+.split-mode-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+.split-grid-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex: 1; min-height: 0; }
+.split-box { background: white; border-radius: 8px; display: flex; flex-direction: column; border: 1px solid #e5e7eb; height: 350px; }
+.split-header { padding: 8px 12px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; }
+.split-box textarea { flex: 1; border: none; padding: 10px; font-size: 13px; }
+.split-footer { padding: 8px; border-top: 1px solid #e5e7eb; background: #f9fafb; }
+.outputs-wrapper { display: contents; }
+
+/* === SETTINGS LAYOUT (Từ Aulapro chỉnh lại cho Tab) === */
+.settings-layout { display: flex; background: white; border-radius: 8px; border: 1px solid #e5e7eb; height: 100%; overflow: hidden; }
+.settings-sidebar { width: 220px; background: #f9fafb; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 15px 0; overflow-y: auto; }
+.settings-content { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
+.sidebar-category-title { padding: 10px 20px 5px; font-size: 11px; font-weight: 800; color: #9ca3af; }
+.sidebar-btn { text-align: left; padding: 10px 20px; border: none; background: transparent; font-size: 13px; font-weight: 600; color: #4b5563; cursor: pointer; border-left: 3px solid transparent; }
+.sidebar-btn:hover { background: #f3f4f6; }
+.sidebar-btn.active { color: var(--primary); border-left-color: var(--primary); background: white; font-weight: 700; }
+.setting-panel { display: none; flex-direction: column; }
+.setting-panel.active { display: block; }
+.panel-header h2 { margin: 0 0 15px 0; font-size: 18px; }
+
+/* Cài đặt Format Cards */
+.format-options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+.format-card { border: 1px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: 0.2s; }
+.format-card.active { border-color: var(--primary); background: #eff6ff; box-shadow: 0 0 0 1px var(--primary); }
+.card-header { padding: 10px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.radio-circle { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #d1d5db; position: relative; }
+.format-card.active .radio-circle { border-color: var(--primary); }
+.format-card.active .radio-circle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 6px; height: 6px; background: var(--primary); border-radius: 50%; }
+.card-body { padding: 15px; font-size: 14px; }
+.full-width-input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 14px; margin-top: 5px; }
+
+/* === DATA TABLES (Từ BigPro) === */
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.top-bar h2 { margin: 0; font-size: 20px; }
+.filter-bar { display: flex; gap: 10px; margin-bottom: 15px; }
+.filter-bar input, .filter-bar select { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+.table-container { background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow-x: auto; flex: 1; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+.data-table th { background: #f9fafb; font-weight: 700; color: #4b5563; position: sticky; top: 0; }
+.tag { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.tag.character { background: #dbeafe; color: #1e40af; }
+.tag.location { background: #dcfce7; color: #166534; }
+.tag.faction { background: #fee2e2; color: #991b1b; }
+
+/* === MODALS === */
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal.hidden { display: none; }
+.modal-content { background: white; width: 500px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
+.modal-header { padding: 15px 20px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { margin: 0; font-size: 16px; }
+.close { cursor: pointer; font-size: 20px; font-weight: bold; color: #6b7280; }
+.modal-body { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+.modal-footer { padding: 15px 20px; border-top: 1px solid #e5e7eb; background: #f9fafb; text-align: right; }
+
+/* === UTILS === */
+.btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-success { background: #10b981; color: white; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; }
+.full-width { width: 100%; }
+.badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: #e5e7eb; color: #374151; }
+.badge-yellow { background: #fef08a; color: #854d0e; }
+.badge-green { background: #bbf7d0; color: #166534; }
+.badge-blue { background: #bfdbfe; color: #1e40af; }
+.hidden { display: none !important; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+/* Notification */
+#notification-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+.notification { padding: 12px 20px; border-radius: 6px; color: white; font-size: 13px; font-weight: 600; animation: slideIn 0.3s ease-out; }
+.notification.success { background: #10b981; }
+.notification.error { background: #ef4444; }
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: 0; } }
