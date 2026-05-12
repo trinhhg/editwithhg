@@ -1,26 +1,37 @@
-// v1.0 - Initial Merge (aulapro + bigpro) - EditWithHg - 2026-05-12
+// v1.1 - Tích hợp Zero-DB (Fetch JSON + IndexedDB) - 2026-05-12
 
 // --- GLOBAL STATE ---
-const STORAGE_KEY = 'editwithhg_data';
+const STORAGE_KEY = 'editwithhg_settings';
+const IDB_NAME = 'EditWithHgDB';
+
 let appData = {
     settings: {
         fontSize: '15px',
         fontFamily: "'Montserrat', sans-serif",
-        formatDialog: 0, // 0: Keep, 1: Inline, 2: Newline, 3: Dash
-        capsRule: 0, // 0: Keep, 1: Lower, 2: TitleCase
+        formatDialog: 0,
+        capsRule: 0,
         regexPreset: 'chapter',
         customRegex: ''
     },
-    entities: [],
-    relations: []
+    relations: [] // Quan hệ vẫn lưu localStorage vì nhẹ
 };
 
+// Zero-DB Engine
+window.coreDictionary = []; // Từ điển tải từ JSON
+window.localEntities = [];  // Từ mới lưu trong IndexedDB
+window.activeDictionary = []; // Bản gộp của cả 2 để chạy replace
+
+let dbInstance = null;
+
 // --- INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', () => {
-    document.body.classList.remove('loading');
-    loadData();
+document.addEventListener('DOMContentLoaded', async () => {
+    loadSettings();
     applySettingsToUI();
     
+    // Khởi chạy Zero-DB
+    await initZeroDB();
+    document.body.classList.remove('loading');
+
     // Auto-count input text
     document.getElementById('raw-text').addEventListener('input', function() {
         document.getElementById('input-word-count').innerText = `Words: ${countWords(this.value)}`;
@@ -61,23 +72,130 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// --- ZERO-DB ENGINE (INDEXEDDB + FETCH) ---
+async function initZeroDB() {
+    const badge = document.getElementById('db-status-badge');
+    badge.innerText = "Đang tải Core DB...";
+    badge.className = "badge badge-yellow";
+
+    // 1. Fetch Core Dictionary từ file tĩnh
+    try {
+        const res = await fetch('/data/core_dict.json');
+        if (res.ok) {
+            window.coreDictionary = await res.json();
+        } else {
+            console.warn("Chưa có file core_dict.json, dùng list rỗng.");
+        }
+    } catch (e) {
+        console.warn("Fetch core_dict.json lỗi (có thể do chạy local).", e);
+    }
+
+    // 2. Init IndexedDB
+    await new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = e => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('new_entities')) {
+                db.createObjectStore('new_entities', { keyPath: 'id' });
+            }
+        };
+        req.onsuccess = e => {
+            dbInstance = e.target.result;
+            resolve();
+        };
+        req.onerror = e => reject(e);
+    });
+
+    // 3. Load Local Entities
+    window.localEntities = await getAllLocalEntities();
+
+    // 4. Merge
+    mergeDictionaries();
+
+    badge.innerText = `DB Sẵn sàng (${window.activeDictionary.length} từ)`;
+    badge.className = "badge badge-green";
+}
+
+function getAllLocalEntities() {
+    return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction('new_entities', 'readonly');
+        const store = tx.objectStore('new_entities');
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function saveLocalEntity(ent) {
+    return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction('new_entities', 'readwrite');
+        const store = tx.objectStore('new_entities');
+        const req = store.put(ent);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function deleteLocalEntity(id) {
+    return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction('new_entities', 'readwrite');
+        const store = tx.objectStore('new_entities');
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function mergeDictionaries() {
+    // Ưu tiên từ mới (localEntities) đè lên từ cũ nếu trùng ID
+    const map = new Map();
+    window.coreDictionary.forEach(ent => map.set(ent.id, ent));
+    window.localEntities.forEach(ent => map.set(ent.id, ent)); // Ghi đè
+    window.activeDictionary = Array.from(map.values());
+}
+
+function exportNewWordsCSV() {
+    if (window.localEntities.length === 0) return showNotif("Không có từ mới nào trong Local để xuất!", "error");
+    
+    let csv = "id,name,type,aliases,notes\n";
+    window.localEntities.forEach(e => {
+        const safeAliases = e.aliases ? e.aliases.join(',').replace(/"/g, '""') : '';
+        const safeNotes = e.notes ? e.notes.replace(/"/g, '""') : '';
+        csv += `${e.id},"${e.name}",${e.type},"${safeAliases}","${safeNotes}"\n`;
+    });
+
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "new_words.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotif("Đã tải xuống file new_words.csv");
+}
+
+
 // --- CORE UTILS ---
-function loadData() {
+function loadSettings() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-        try { appData = JSON.parse(raw); } catch(e) { console.error("Error parsing DB"); }
-        if (!appData.settings) appData.settings = {};
-        if (!appData.entities) appData.entities = [];
-        if (!appData.relations) appData.relations = [];
+        try { 
+            const parsed = JSON.parse(raw); 
+            if(parsed.settings) appData.settings = parsed.settings;
+            if(parsed.relations) appData.relations = parsed.relations;
+        } catch(e) { console.error("Error parsing settings DB"); }
     }
 }
 
-function saveData() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+function saveSettings() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        settings: appData.settings,
+        relations: appData.relations
+    }));
 }
 
 function switchTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active', 'hidden'));
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
     
     document.getElementById(`tab-${tabId}`).classList.remove('hidden');
@@ -105,13 +223,11 @@ function showNotif(msg, type='success') {
 
 // --- SETTINGS LOGIC ---
 function applySettingsToUI() {
-    // Font/Size
     document.documentElement.style.setProperty('--editor-font-size', appData.settings.fontSize || '15px');
     document.documentElement.style.setProperty('--editor-font-family', appData.settings.fontFamily || "'Montserrat', sans-serif");
     document.getElementById('setting-size').value = appData.settings.fontSize || '15px';
     document.getElementById('setting-font').value = appData.settings.fontFamily || "'Montserrat', sans-serif";
 
-    // Format & Caps UI matching
     document.querySelectorAll(`[data-format]`).forEach(el => el.classList.remove('active'));
     const fCard = document.querySelector(`[data-format="${appData.settings.formatDialog}"]`);
     if(fCard) fCard.classList.add('active');
@@ -120,7 +236,6 @@ function applySettingsToUI() {
     const cCard = document.querySelector(`[data-caps="${appData.settings.capsRule}"]`);
     if(cCard) cCard.classList.add('active');
 
-    // Regex UI matching
     document.querySelector(`input[name="regex-preset"][value="${appData.settings.regexPreset || 'chapter'}"]`).checked = true;
     document.getElementById('custom-regex-input').value = appData.settings.customRegex || '';
 }
@@ -128,13 +243,13 @@ function applySettingsToUI() {
 function applySettings() {
     appData.settings.fontSize = document.getElementById('setting-size').value;
     appData.settings.fontFamily = document.getElementById('setting-font').value;
-    saveData();
+    saveSettings();
     applySettingsToUI();
 }
 
 function setSetting(key, val, el) {
     appData.settings[key] = val;
-    saveData();
+    saveSettings();
     el.parentElement.querySelectorAll('.format-card').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
 }
@@ -142,13 +257,20 @@ function setSetting(key, val, el) {
 function saveRegex() {
     appData.settings.regexPreset = document.querySelector('input[name="regex-preset"]:checked').value;
     appData.settings.customRegex = document.getElementById('custom-regex-input').value;
-    saveData();
+    saveSettings();
 }
 
-function resetAllData() {
-    if(confirm("BẠN CÓ CHẮC MUỐN XÓA TOÀN BỘ DỮ LIỆU? KHÔNG THỂ KHÔI PHỤC!")) {
+async function resetAllData() {
+    if(confirm("BẠN CÓ CHẮC MUỐN XÓA TOÀN BỘ CÀI ĐẶT VÀ TỪ MỚI TRONG MÁY NÀY?")) {
         localStorage.removeItem(STORAGE_KEY);
-        location.reload();
+        // Xóa IndexedDB
+        if(dbInstance) {
+            dbInstance.close();
+            const req = indexedDB.deleteDatabase(IDB_NAME);
+            req.onsuccess = () => location.reload();
+        } else {
+            location.reload();
+        }
     }
 }
 
@@ -162,15 +284,20 @@ function renderEntityTable() {
     tbody.innerHTML = '';
     
     let count = 0;
-    appData.entities.forEach(ent => {
-        const aliasStr = ent.aliases.join(', ');
+    window.activeDictionary.forEach(ent => {
+        const aliasStr = (ent.aliases || []).join(', ');
         if ((ent.name.toLowerCase().includes(filterTxt) || aliasStr.toLowerCase().includes(filterTxt)) && 
             (filterType === 'all' || ent.type === filterType)) {
             count++;
+            
+            // Highlight nếu là từ mới ở Local (để bạn dễ phân biệt cái nào chưa đẩy lên GitHub)
+            const isLocal = window.localEntities.some(l => l.id === ent.id);
+            const statusIcon = isLocal ? '<i class="fa-solid fa-clock-rotate-left" style="color:#f59e0b; margin-left:5px;" title="Từ mới ở Local"></i>' : '';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="color:#999;">${count}</td>
-                <td style="font-weight:700; color:var(--primary)">${ent.name}</td>
+                <td style="font-weight:700; color:var(--primary)">${ent.name} ${statusIcon}</td>
                 <td><span class="tag ${ent.type}">${typeMap[ent.type] || ent.type}</span></td>
                 <td>${aliasStr}</td>
                 <td style="color:#666;">${ent.notes || ''}</td>
@@ -184,47 +311,56 @@ function renderEntityTable() {
     });
 }
 
-function saveEntity() {
+async function saveEntity() {
     const id = document.getElementById('ent-id').value;
     const name = document.getElementById('ent-name').value.trim();
     if(!name) return showNotif("Thiếu tên chuẩn!", "error");
     
+    const aliasesRaw = document.getElementById('ent-aliases').value;
+    const aliases = aliasesRaw ? aliasesRaw.split(',').map(x=>x.trim()).filter(x=>x) : [];
+
     const ent = {
         id: id || 'ent-'+Date.now(),
         type: document.getElementById('ent-type').value,
         name: name,
-        aliases: document.getElementById('ent-aliases').value.split(',').map(x=>x.trim()).filter(x=>x),
+        aliases: aliases,
         notes: document.getElementById('ent-notes').value
     };
     
-    if(id) {
-        const idx = appData.entities.findIndex(x=>x.id===id);
-        if(idx > -1) appData.entities[idx] = ent;
-    } else {
-        appData.entities.push(ent);
-    }
+    // Lưu vào IndexedDB
+    await saveLocalEntity(ent);
     
-    saveData(); 
+    // Cập nhật lại mảng local trong RAM
+    window.localEntities = await getAllLocalEntities();
+    mergeDictionaries();
+    
     closeModal('modal-entity'); 
     renderEntityTable();
-    showNotif("Đã lưu thực thể");
+    document.getElementById('db-status-badge').innerText = `DB Sẵn sàng (${window.activeDictionary.length} từ)`;
+    showNotif("Đã lưu thực thể vào Local");
 }
 
-function deleteEntity(id){ 
-    if(confirm("Xóa thực thể này?")){
-        appData.entities = appData.entities.filter(x=>x.id!==id); 
-        saveData(); 
+async function deleteEntity(id){ 
+    if(confirm("Xóa thực thể này? (Chỉ xóa được từ mới trên máy này)")){
+        await deleteLocalEntity(id);
+        window.localEntities = await getAllLocalEntities();
+        
+        // Nếu nó vốn là từ của Core Dict, thì việc xóa ở Local chỉ là hủy bỏ việc Override.
+        // Để xóa hoàn toàn Core Dict, bạn phải edit file CSV gốc trên GitHub.
+        mergeDictionaries();
         renderEntityTable();
+        document.getElementById('db-status-badge').innerText = `DB Sẵn sàng (${window.activeDictionary.length} từ)`;
+        showNotif("Đã xóa khỏi Local");
     }
 }
 
 function editEntity(id){ 
-    const e = appData.entities.find(x=>x.id===id); 
+    const e = window.activeDictionary.find(x=>x.id===id); 
     if(!e) return;
     document.getElementById('ent-id').value = e.id; 
     document.getElementById('ent-name').value = e.name; 
     document.getElementById('ent-type').value = e.type; 
-    document.getElementById('ent-aliases').value = e.aliases.join(', '); 
+    document.getElementById('ent-aliases').value = (e.aliases || []).join(', '); 
     document.getElementById('ent-notes').value = e.notes || ''; 
     openModal('modal-entity');
 }
@@ -235,7 +371,7 @@ function renderRelationTable() {
     const term = document.getElementById('search-relation').value.toLowerCase();
     tbody.innerHTML = '';
     
-    const getName = (val) => { const e = appData.entities.find(x=>x.id===val); return e ? e.name : val; };
+    const getName = (val) => { const e = window.activeDictionary.find(x=>x.id===val); return e ? e.name : val; };
     let count = 0;
     
     appData.relations.forEach(rel => {
@@ -269,14 +405,14 @@ function saveRelation(){
         from, to, type
     });
     
-    saveData(); 
+    saveSettings(); 
     closeModal('modal-relation'); 
     renderRelationTable();
 }
 
 function openRelationModal(){ 
-    if(appData.entities.length < 2) return showNotif("Cần ít nhất 2 thực thể để tạo quan hệ", "error");
-    const opts = appData.entities.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+    if(window.activeDictionary.length < 2) return showNotif("Cần ít nhất 2 thực thể để tạo quan hệ", "error");
+    const opts = window.activeDictionary.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
     document.getElementById('rel-from').innerHTML = opts; 
     document.getElementById('rel-to').innerHTML = opts;
     document.getElementById('rel-type').value = '';
@@ -286,7 +422,7 @@ function openRelationModal(){
 function deleteRelation(id){
     if(confirm("Xóa quan hệ này?")){
         appData.relations = appData.relations.filter(x=>x.id!==id); 
-        saveData(); 
+        saveSettings(); 
         renderRelationTable();
     }
 }
@@ -298,7 +434,7 @@ function processText() {
 
     let stats = { foundLore: 0, replaceNormal: 0, capsFixed: 0 };
 
-    // 1. CHUẨN HÓA HỘI THOẠI (Từ aulapro)
+    // 1. CHUẨN HÓA HỘI THOẠI
     const formatMode = appData.settings.formatDialog;
     if (formatMode > 0) {
         text = text.replace(/:\s*([“"-].*?[”"]?)/g, (match, p1) => {
@@ -309,34 +445,34 @@ function processText() {
         });
     }
 
-    // 2. XỬ LÝ VIẾT HOA BẤT THƯỜNG (Từ aulapro)
+    // 2. XỬ LÝ VIẾT HOA BẤT THƯỜNG
     const capsMode = appData.settings.capsRule;
     if (capsMode > 0) {
         text = text.replace(/(?<=[a-zà-ỹ]\s+)([A-ZÀ-Ỹ][a-zà-ỹ]+)/g, (match) => {
             stats.capsFixed++;
             if (capsMode === 1) return match.toLowerCase();
-            if (capsMode === 2) return match.charAt(0).toUpperCase() + match.slice(1).toLowerCase(); // Giữ title case
+            if (capsMode === 2) return match.charAt(0).toUpperCase() + match.slice(1).toLowerCase();
             return match;
         });
     }
 
-    // 3. THAY THẾ TỪ ĐIỂN THỰC THỂ LORE (Từ bigpro)
-    // Tương lai: Sẽ fetch dict.json ở đây. Hiện tại dùng appData.entities
+    // 3. THAY THẾ TỪ ĐIỂN TỪ ZERO-DB ENGINE
     let keywords = []; 
     let map = {};
-    appData.entities.forEach(e => {
+    window.activeDictionary.forEach(e => {
         map[e.name] = { t: e.name, type: 'main' }; 
         keywords.push(e.name);
-        e.aliases.forEach(a => { 
+        (e.aliases || []).forEach(a => { 
             map[a] = { t: e.name, type: 'alias' }; 
             keywords.push(a); 
         });
     });
     
-    // Sort longest first
+    // Sort longest first to avoid partial replacement bugs
     keywords.sort((a,b) => b.length - a.length);
     
     if (keywords.length > 0) {
+        // Build regex
         const pattern = new RegExp(`(${keywords.map(k=>k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g');
         text = text.replace(pattern, (m) => {
             const d = map[m];
@@ -352,7 +488,7 @@ function processText() {
 
     // Output rendering
     const out = document.getElementById('processed-output');
-    out.innerHTML = text; // Because it contains HTML spans
+    out.innerHTML = text; 
     
     // Update Badges
     document.getElementById('count-found').innerText = `Lore: ${stats.foundLore}`;
@@ -378,14 +514,14 @@ function copyResult() {
     }
 }
 
-// --- SPLIT CHƯƠNG LOGIC (Từ aulapro) ---
+// --- SPLIT CHƯƠNG LOGIC ---
 function processSplit() {
     const text = document.getElementById('split-input-text').value;
     if(!text) return showNotif("Không có văn bản để chia", "error");
 
     const mode = document.querySelector('input[name="split-type"]:checked').value;
     const wrapper = document.getElementById('split-outputs-wrapper');
-    wrapper.innerHTML = ''; // Clear old
+    wrapper.innerHTML = ''; 
 
     let parts = [];
 
@@ -399,7 +535,6 @@ function processSplit() {
             if (currentIdx >= totalLen) break;
             let endIdx = currentIdx + chunkLen;
             if (endIdx < totalLen) {
-                // Find next newline to avoid splitting words
                 let nextNewline = text.indexOf('\n', endIdx);
                 if (nextNewline !== -1 && nextNewline - endIdx < 500) {
                     endIdx = nextNewline + 1;
@@ -439,7 +574,6 @@ function processSplit() {
         }
     }
 
-    // Render output boxes
     parts.forEach((p, idx) => {
         const box = document.createElement('div');
         box.className = 'split-box';
